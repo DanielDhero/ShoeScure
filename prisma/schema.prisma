@@ -1,0 +1,197 @@
+// ShoeScure database schema (PostgreSQL / Neon)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  phone        String?
+  address      String?
+  coinBalance  Int      @default(1000)
+  createdAt    DateTime @default(now())
+
+  favorites    Favorite[]
+  cartItems    CartItem[]
+  orders       Order[]
+  listings     SellListing[]
+  legitChecks  LegitCheck[]
+  repairs      RepairRequest[]
+  coinTxns     CoinTransaction[]
+  bids         Bid[]
+}
+
+model Brand {
+  id       String    @id @default(cuid())
+  slug     String    @unique
+  name     String
+  products Product[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  brand       Brand    @relation(fields: [brandId], references: [id])
+  brandId     String
+  category    String
+  price       Int
+  retailPrice Int
+  releaseDate String
+  color       String
+  gender      String
+  image       String
+  description String
+  sizes       String   // JSON-encoded array of EU sizes
+  featured    Boolean  @default(false)
+  label       String?  // e.g. "New Release", "Best Seller"
+  createdAt   DateTime @default(now())
+
+  favorites Favorite[]
+  cartItems CartItem[]
+  orders    Order[]
+  listings  SellListing[]
+  bids      Bid[]
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model CartItem {
+  id        String      @id @default(cuid())
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  listing   SellListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId String
+  size      Int
+  quantity  Int         @default(1)
+  createdAt DateTime    @default(now())
+
+  @@unique([userId, listingId])
+}
+
+model Order {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  product     Product   @relation(fields: [productId], references: [id])
+  productId   String
+  size        Int
+  price       Int
+  shipping    Int          @default(30000)
+  total       Int
+  status      String       @default("PENDING") // PENDING | PAID | FAILED | EXPIRED
+  type        String? // BNIB | USED (kondisi listing yang dibeli)
+  condition   String?
+  listing     SellListing? @relation(fields: [listingId], references: [id])
+  listingId   String?
+  note        String?
+  ref         String // shared invoice ref = Midtrans order_id
+  snapToken   String?
+  paymentType String?
+  paidAt      DateTime?
+  createdAt   DateTime     @default(now())
+}
+
+model SellListing {
+  id        String     @id @default(cuid())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  product   Product    @relation(fields: [productId], references: [id])
+  productId String
+  size      Int
+  type      String     @default("BNIB") // BNIB | USED
+  condition String     @default("Brand New")
+  price     Int
+  image     String? // foto barang (wajib utk USED) — Cloudinary URL
+  status    String     @default("ACTIVE") // ACTIVE | INACTIVE | SOLD
+  cartItems CartItem[]
+  orders    Order[]
+  bids      Bid[]
+  createdAt DateTime   @default(now())
+}
+
+model LegitCheck {
+  id            String    @id @default(cuid())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  brand         String
+  productName   String
+  images        String? // JSON array foto (wajib)
+  status        String    @default("In Review") // In Review | Authentic | Fake
+  verdictNote   String?
+  price         Int       @default(0)
+  payMethod     String    @default("COIN") // COIN | CASH
+  paymentStatus String    @default("PENDING") // PENDING | PAID | FAILED
+  ref           String?
+  snapToken     String?
+  paidAt        DateTime?
+  certNo        String
+  createdAt     DateTime  @default(now())
+}
+
+model RepairRequest {
+  id            String    @id @default(cuid())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  service       String // ringkasan layanan
+  services      String? // JSON array id layanan à la carte
+  productName   String
+  images        String? // JSON array foto (wajib)
+  note          String?
+  price         Int       @default(0)
+  status        String    @default("In Progress") // In Progress | Done | Shipped
+  paymentStatus String    @default("PENDING") // PENDING | PAID | FAILED
+  ref           String?
+  snapToken     String?
+  paidAt        DateTime?
+  certNo        String
+  createdAt     DateTime  @default(now())
+}
+
+model Bid {
+  id        String       @id @default(cuid())
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  product   Product      @relation(fields: [productId], references: [id])
+  productId String
+  size      Int
+  type      String // BNIB | USED
+  amount    Int
+  status    String       @default("PENDING") // PENDING | ACCEPTED | REJECTED | EXPIRED | CANCELLED
+  listing   SellListing? @relation(fields: [listingId], references: [id])
+  listingId String?
+  createdAt DateTime     @default(now())
+}
+
+model CoinTransaction {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  type        String // TOPUP | SPEND
+  amount      Int // jumlah coin
+  description String
+  status      String   @default("SUCCESS") // SUCCESS | PENDING | FAILED
+  price       Int      @default(0) // rupiah dibayar (top-up)
+  ref         String? // Midtrans order_id (top-up)
+  snapToken   String?
+  createdAt   DateTime @default(now())
+}
